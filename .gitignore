@@ -1,0 +1,7 @@
+/ShiduWindowsService
+bin/
+obj/
+.vs/
+*.suo
+*.user
+
