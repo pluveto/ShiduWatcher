@@ -64,6 +64,11 @@ namespace ShiduWatcher.Types
             StartTime = startTime;
             Duration = duration;
         }
+
+        public override string ToString()
+        {
+            return $"WebpageUsage({Url}, {Domain}, {StartTime}, {Duration})";
+        }
     }
 
 }

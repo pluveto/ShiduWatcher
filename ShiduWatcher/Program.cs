@@ -29,9 +29,9 @@ namespace ShiduWatcher
             var verbose = true;
             var databasePersister = new DatabasePersister();
             var usageService = new ProgramUsageService(databasePersister, 1000, verbose);
-            new UserInactivityDetector(threshold: TimeSpan.FromMinutes(10), checkInterval: TimeSpan.FromMinutes(1),
-                userActive: (s, e) => usageService.Pause(),
-                userInactive: (s, e) => usageService.Continue()
+            new UserInactivityDetector(threshold: TimeSpan.FromMinutes(10), checkInterval: TimeSpan.FromSeconds(1),
+                userActive: (s, e) => usageService.Resume(),
+                userInactive: (s, e) => usageService.Pause()
             ).Start();
 
             var port = NetworkHelper.FindAvailablePort(1893, 1976);
@@ -48,6 +48,10 @@ namespace ShiduWatcher
                     if (!usageService.IsPaused())
                     {
                         var newUsage = ForegroundWindowHelper.GetForegroundProgramUsage();
+                        if (newUsage == null)
+                        {
+                            continue;
+                        }
 
                         if (currentUsage == null)
                         {
@@ -56,9 +60,8 @@ namespace ShiduWatcher
 
                         if (currentUsage != null && currentUsage.ProcessName != newUsage.ProcessName)
                         {
-                            currentUsage.Duration += DateTime.Now - currentUsage.StartTime;
+                            currentUsage.Duration = DateTime.Now - currentUsage.StartTime;
                             await usageService.AddUsage(currentUsage);
-
                             currentUsage = newUsage;
                         }
                     }

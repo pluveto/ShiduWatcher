@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Timers;
 using Timer = System.Timers.Timer;
@@ -26,7 +27,7 @@ namespace ShiduWatcher
 
         public UserInactivityDetector(TimeSpan threshold, TimeSpan checkInterval, EventHandler userInactive, EventHandler userActive)
         {
-            inactivityThreshold = threshold.Milliseconds;
+            inactivityThreshold = (int)threshold.TotalMilliseconds;
             UserInactive += userInactive;
             UserActive += userActive;
             inactivityTimer = new Timer(checkInterval);
@@ -45,7 +46,10 @@ namespace ShiduWatcher
 
         private void CheckInactivity(object? sender, ElapsedEventArgs e)
         {
-            var active = GetIdleTime() <= inactivityThreshold;
+            var idleTime = GetIdleTime();
+            Debug.WriteLine("idleTime: " + idleTime.ToString() + " threshold: " + inactivityThreshold);
+
+            var active = idleTime <= inactivityThreshold;
             if (!active && lastActive)
             {
                 UserInactive?.Invoke(this, EventArgs.Empty);
