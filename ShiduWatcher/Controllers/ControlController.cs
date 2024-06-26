@@ -24,7 +24,7 @@ namespace ShiduWatcher.Controllers
         [HttpPost("continue")]
         public IActionResult Continue()
         {
-            _usageService.Continue();
+            _usageService.Resume();
             return Ok(new { message = "Usage tracking continued" });
         }
 

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -31,6 +32,7 @@ namespace ShiduWatcher
             {
                 return;
             }
+            Debug.WriteLine("usage: ", usage.ToString());
             await _databasePersister.SaveProgramUsageAsync(usage);
         }
 
@@ -50,16 +52,19 @@ namespace ShiduWatcher
             {
                 return;
             }
+            Debug.WriteLine("webpage usage: ", usage.ToString());
             await _databasePersister.SaveWebpageUsageAsync(usage);
         }
 
         public void Pause()
         {
+            Debug.WriteLine("ProgramUsageService is paused");
             _isPaused = true;
         }
 
-        public void Continue()
+        public void Resume()
         {
+            Debug.WriteLine("ProgramUsageService is resumed");
             _isPaused = false;
         }
 
