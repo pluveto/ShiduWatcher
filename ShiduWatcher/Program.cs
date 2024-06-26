@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Drawing;
 using ShiduWatcher.ShiduWatcher;
+using ShiduWatcher.Types;
 
 namespace ShiduWatcher
 {
@@ -37,14 +38,24 @@ namespace ShiduWatcher
 
             var mainLoopTask = Task.Run(async () =>
             {
+                ProgramUsage? currentUsage = null;
                 while (true)
                 {
                     if (!usageService.IsPaused())
                     {
-                        var currentUsage = ForegroundWindowHelper.GetForegroundProgramUsage();
-                        if (currentUsage != null)
+                        var newUsage = ForegroundWindowHelper.GetForegroundProgramUsage();
+
+                        if (currentUsage == null)
                         {
-                            usageService.UpdateUsage(currentUsage);
+                            currentUsage = newUsage;
+                        }
+
+                        if (currentUsage != null && currentUsage.ProcessName != newUsage.ProcessName)
+                        {
+                            currentUsage.Duration += DateTime.Now - currentUsage.StartTime;
+                            await usageService.AddUsage(currentUsage);
+
+                            currentUsage = newUsage;
                         }
                     }
 
@@ -58,11 +69,7 @@ namespace ShiduWatcher
                 // 消息循环
                 while (!trayIcon.Quit)
                 {
-                    if (GetMessage(out MSG msg, IntPtr.Zero, 0, 0))
-                    {
-                        TranslateMessage(ref msg);
-                        DispatchMessage(ref msg);
-                    }
+                    Thread.Sleep(1000);
                 }
             }
         }

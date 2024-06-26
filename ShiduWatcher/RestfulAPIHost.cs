@@ -16,7 +16,10 @@ namespace ShiduWatcher.ShiduWatcher
                 {
                     services.AddSingleton(usageService);
                     services.AddControllers() // Some warning, but it works
-                            .AddNewtonsoftJson()
+                            .AddNewtonsoftJson(options =>
+                            {
+                                options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
+                            })
                             .AddApplicationPart(typeof(ControlController).Assembly)
                             .AddApplicationPart(typeof(UsageReportController).Assembly)
                             .AddApplicationPart(typeof(IconController).Assembly)

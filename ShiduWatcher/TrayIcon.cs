@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace ShiduWatcher
 {
@@ -15,6 +16,7 @@ namespace ShiduWatcher
         private IntPtr hWnd;
         private IntPtr hInstance;
         private NOTIFYICONDATA nid;
+        private Thread messageLoopThread;
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern IntPtr CreateWindowEx(
@@ -107,32 +109,46 @@ namespace ShiduWatcher
         private delegate IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
         public bool Quit { get; set; } = false;
+
         public TrayIcon(string tooltip, IntPtr iconHandle)
         {
-            WNDCLASS wc = new WNDCLASS
+            messageLoopThread = new Thread(() =>
             {
-                lpfnWndProc = WindowProc,
-                hInstance = Marshal.GetHINSTANCE(typeof(TrayIcon).Module),
-                lpszClassName = "ShiduWatcherClass",
-                hIcon = LoadIcon(IntPtr.Zero, (IntPtr)0x7F00), // IDI_APPLICATION
-                hCursor = LoadCursor(IntPtr.Zero, 0x7F00) // IDC_ARROW
-            };
+                WNDCLASS wc = new WNDCLASS
+                {
+                    lpfnWndProc = WindowProc,
+                    hInstance = Marshal.GetHINSTANCE(typeof(TrayIcon).Module),
+                    lpszClassName = "ShiduWatcherClass",
+                    hIcon = LoadIcon(IntPtr.Zero, (IntPtr)0x7F00), // IDI_APPLICATION
+                    hCursor = LoadCursor(IntPtr.Zero, 0x7F00) // IDC_ARROW
+                };
 
-            RegisterClass(ref wc);
+                RegisterClass(ref wc);
 
-            hWnd = CreateWindowEx(0, "ShiduWatcherClass", "Shidu Watcher", 0x80000000, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, wc.hInstance, IntPtr.Zero);
+                hWnd = CreateWindowEx(0, "ShiduWatcherClass", "Shidu Watcher", 0x80000000, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, wc.hInstance, IntPtr.Zero);
 
-            nid = new NOTIFYICONDATA
-            {
-                cbSize = (uint)Marshal.SizeOf(typeof(NOTIFYICONDATA)),
-                hWnd = hWnd,
-                uID = 1,
-                uFlags = 0x00000002 | 0x00000001 | 0x00000004, // NIF_MESSAGE | NIF_ICON | NIF_TIP
-                uCallbackMessage = WM_TRAYICON,
-                hIcon = iconHandle,
-                szTip = tooltip
-            };
-            Shell_NotifyIcon(0x00000000, ref nid); // NIM_ADD
+                nid = new NOTIFYICONDATA
+                {
+                    cbSize = (uint)Marshal.SizeOf(typeof(NOTIFYICONDATA)),
+                    hWnd = hWnd,
+                    uID = 1,
+                    uFlags = 0x00000002 | 0x00000001 | 0x00000004, // NIF_MESSAGE | NIF_ICON | NIF_TIP
+                    uCallbackMessage = WM_TRAYICON,
+                    hIcon = iconHandle,
+                    szTip = tooltip
+                };
+                Shell_NotifyIcon(0x00000000, ref nid); // NIM_ADD
+
+                MSG msg;
+                while (GetMessage(out msg, IntPtr.Zero, 0, 0))
+                {
+                    TranslateMessage(ref msg);
+                    DispatchMessage(ref msg);
+                }
+            });
+
+            messageLoopThread.IsBackground = true;
+            messageLoopThread.Start();
         }
 
         private IntPtr WindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
@@ -152,7 +168,6 @@ namespace ShiduWatcher
                         TrackPopupMenu(hTrayMenu, 0x0000, pt.x, pt.y, 0, hWnd, IntPtr.Zero); // TPM_BOTTOMALIGN | TPM_LEFTALIGN
                     }
                     break;
-
 
                 case WM_COMMAND:
                     if (wParam.ToInt32() == ID_TRAY_EXIT)
@@ -175,10 +190,35 @@ namespace ShiduWatcher
             return IntPtr.Zero;
         }
 
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool GetMessage(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool TranslateMessage(ref MSG lpMsg);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr DispatchMessage(ref MSG lpMsg);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MSG
+        {
+            public IntPtr hwnd;
+            public uint message;
+            public IntPtr wParam;
+            public IntPtr lParam;
+            public uint time;
+            public POINT pt;
+        }
+
         public void Dispose()
         {
             Shell_NotifyIcon(0x00000002, ref nid); // NIM_DELETE
             DestroyWindow(hWnd);
+            if (messageLoopThread != null && messageLoopThread.IsAlive)
+            {
+                PostQuitMessage(0);
+                messageLoopThread.Join();
+            }
         }
     }
 }

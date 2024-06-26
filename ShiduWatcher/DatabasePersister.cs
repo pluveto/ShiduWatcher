@@ -10,9 +10,8 @@ namespace ShiduWatcher
     {
         private string connectionString = "Data Source=usage_stats.db;Version=3;";
         private SQLiteConnection connection;
-        private SQLiteCommand checkCommand;
-        private SQLiteCommand insertCommand;
-        private SQLiteCommand updateCommand;
+        private SQLiteCommand programUsageInsertCommand;
+        private SQLiteCommand webpageUsageInsertCommand;
 
         public DatabasePersister()
         {
@@ -21,30 +20,23 @@ namespace ShiduWatcher
             connection = new SQLiteConnection(connectionString);
             connection.Open();
 
-            string checkQuery = @"
-            SELECT COUNT(1) FROM ProgramUsage 
-            WHERE ProcessName = @ProcessName AND Timestamp = @Timestamp";
-            checkCommand = new SQLiteCommand(checkQuery, connection);
-            checkCommand.Parameters.Add(new SQLiteParameter("@ProcessName"));
-            checkCommand.Parameters.Add(new SQLiteParameter("@Timestamp"));
-
             string insertQuery = @"
             INSERT INTO ProgramUsage (ProcessName, ExecutablePath, Timestamp, Duration)
             VALUES (@ProcessName, @ExecutablePath, @Timestamp, @Duration)";
-            insertCommand = new SQLiteCommand(insertQuery, connection);
-            insertCommand.Parameters.Add(new SQLiteParameter("@ProcessName"));
-            insertCommand.Parameters.Add(new SQLiteParameter("@ExecutablePath"));
-            insertCommand.Parameters.Add(new SQLiteParameter("@Timestamp"));
-            insertCommand.Parameters.Add(new SQLiteParameter("@Duration"));
+            programUsageInsertCommand = new SQLiteCommand(insertQuery, connection);
+            programUsageInsertCommand.Parameters.Add(new SQLiteParameter("@ProcessName"));
+            programUsageInsertCommand.Parameters.Add(new SQLiteParameter("@ExecutablePath"));
+            programUsageInsertCommand.Parameters.Add(new SQLiteParameter("@Timestamp"));
+            programUsageInsertCommand.Parameters.Add(new SQLiteParameter("@Duration"));
 
-            string updateQuery = @"
-            UPDATE ProgramUsage 
-            SET Duration = @Duration 
-            WHERE ProcessName = @ProcessName AND Timestamp = @Timestamp";
-            updateCommand = new SQLiteCommand(updateQuery, connection);
-            updateCommand.Parameters.Add(new SQLiteParameter("@ProcessName"));
-            updateCommand.Parameters.Add(new SQLiteParameter("@Timestamp"));
-            updateCommand.Parameters.Add(new SQLiteParameter("@Duration"));
+            string webpageUsageInsertQuery = @"
+            INSERT INTO WebpageUsage (Domain, Url, Timestamp, Duration)
+            VALUES (@Domain, @Url, @Timestamp, @Duration)";
+            webpageUsageInsertCommand = new SQLiteCommand(webpageUsageInsertQuery, connection);
+            webpageUsageInsertCommand.Parameters.Add(new SQLiteParameter("@Domain"));
+            webpageUsageInsertCommand.Parameters.Add(new SQLiteParameter("@Url"));
+            webpageUsageInsertCommand.Parameters.Add(new SQLiteParameter("@Timestamp"));
+            webpageUsageInsertCommand.Parameters.Add(new SQLiteParameter("@Duration"));
         }
 
         private void InitializeDatabase()
@@ -65,38 +57,46 @@ namespace ShiduWatcher
                 {
                     command.ExecuteNonQuery();
                 }
+
+                string createWebpageUsageTableQuery = @"
+                CREATE TABLE IF NOT EXISTS WebpageUsage (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Timestamp DATETIME,
+                    Domain TEXT,
+                    Url TEXT,
+                    Duration INTEGER,
+                    UNIQUE(Domain, Url, Timestamp)
+                )";
+                using (var command = new SQLiteCommand(createWebpageUsageTableQuery, connection))
+                {
+                    command.ExecuteNonQuery();
+                }
             }
         }
 
         public async Task SaveProgramUsageAsync(ProgramUsage usage)
         {
-            checkCommand.Parameters["@ProcessName"].Value = usage.ProcessName;
-            checkCommand.Parameters["@Timestamp"].Value = usage.StartTime;
+            programUsageInsertCommand.Parameters["@ProcessName"].Value = usage.ProcessName;
+            programUsageInsertCommand.Parameters["@ExecutablePath"].Value = usage.ExecutablePath;
+            programUsageInsertCommand.Parameters["@Timestamp"].Value = usage.StartTime;
+            programUsageInsertCommand.Parameters["@Duration"].Value = (int)usage.Duration.TotalSeconds;
 
-            long? count = (long?)await checkCommand.ExecuteScalarAsync();
-
-            if (count != null && count > 0)
-            {
-                updateCommand.Parameters["@ProcessName"].Value = usage.ProcessName;
-                updateCommand.Parameters["@Timestamp"].Value = usage.StartTime;
-                updateCommand.Parameters["@Duration"].Value = (int)usage.Duration.TotalSeconds;
-
-                await updateCommand.ExecuteNonQueryAsync();
-            }
-            else
-            {
-                insertCommand.Parameters["@ProcessName"].Value = usage.ProcessName;
-                insertCommand.Parameters["@ExecutablePath"].Value = usage.ExecutablePath;
-                insertCommand.Parameters["@Timestamp"].Value = usage.StartTime;
-                insertCommand.Parameters["@Duration"].Value = (int)usage.Duration.TotalSeconds;
-
-                await insertCommand.ExecuteNonQueryAsync();
-            }
+            await programUsageInsertCommand.ExecuteNonQueryAsync();
         }
 
-        public async Task<UsageReport> GetUsageReportAsync(DateTime startTime, DateTime endTime)
+        public async Task SaveWebpageUsageAsync(WebpageUsage usage)
         {
-            var report = new UsageReport
+            webpageUsageInsertCommand.Parameters["@Domain"].Value = usage.Domain;
+            webpageUsageInsertCommand.Parameters["@Url"].Value = usage.Url;
+            webpageUsageInsertCommand.Parameters["@Timestamp"].Value = usage.StartTime;
+            webpageUsageInsertCommand.Parameters["@Duration"].Value = (int)usage.Duration.TotalSeconds;
+
+            await webpageUsageInsertCommand.ExecuteNonQueryAsync();
+        }
+
+        public async Task<UsageReport<ProgramUsageSummary>> GetUsageReportAsync(DateTime startTime, DateTime endTime)
+        {
+            var report = new UsageReport<ProgramUsageSummary>
             {
                 TotalDuration = 0,
                 Details = new List<ProgramUsageSummary>()
@@ -141,13 +141,13 @@ namespace ShiduWatcher
                                 ProcessName = processName,
                                 ExecutablePath = executablePath,
                                 TotalDuration = 0,
-                                Usage = new List<ProgramUsageDetail>()
+                                Usage = new List<UsageDetail>()
                             };
                         }
 
                         var programUsage = programUsageDict[processName];
                         programUsage.TotalDuration += duration;
-                        programUsage.Usage.Add(new ProgramUsageDetail
+                        programUsage.Usage.Add(new UsageDetail
                         {
                             Timestamp = timestamp,
                             Duration = duration
@@ -163,11 +163,79 @@ namespace ShiduWatcher
             return report;
         }
 
+        public async Task<UsageReport<WebpageUsageSummary>> GetWebpageUsageReportAsync(DateTime startTime, DateTime endTime)
+        {
+            var report = new UsageReport<WebpageUsageSummary>
+            {
+                TotalDuration = 0,
+                Details = new List<WebpageUsageSummary>()
+            };
+
+            string query = @"
+            SELECT Domain, Url, Timestamp, Duration
+            FROM WebpageUsage
+            WHERE Timestamp BETWEEN @StartTime AND @EndTime
+            ORDER BY Domain, Url, Timestamp";
+
+            using (var command = new SQLiteCommand(query, connection))
+            {
+                command.Parameters.AddWithValue("@StartTime", startTime);
+                command.Parameters.AddWithValue("@EndTime", endTime);
+
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    var webpageUsageDict = new Dictionary<string, WebpageUsageSummary>();
+
+                    while (await reader.ReadAsync())
+                    {
+                        string domain = string.Empty;
+                        string url = string.Empty;
+                        DateTime timestamp = default;
+                        int duration = 0;
+
+                        try { domain = reader.GetString(0); } catch { }
+                        try { url = reader.GetString(1); } catch { }
+                        try { timestamp = reader.GetDateTime(2); } catch { }
+                        try { duration = reader.GetInt32(3); } catch { }
+
+                        if (domain.Length == 0 || url.Length == 0)
+                        {
+                            continue;
+                        }
+
+                        if (!webpageUsageDict.ContainsKey(domain))
+                        {
+                            webpageUsageDict[domain] = new WebpageUsageSummary
+                            {
+                                Domain = domain,
+                                Url = url,
+                                TotalDuration = 0,
+                                Usage = new List<UsageDetail>()
+                            };
+                        }
+
+                        var webpageUsage = webpageUsageDict[domain];
+                        webpageUsage.TotalDuration += duration;
+                        webpageUsage.Usage.Add(new UsageDetail
+                        {
+                            Timestamp = timestamp,
+                            Duration = duration
+                        });
+
+                        report.TotalDuration += duration;
+                    }
+
+                    report.Details.AddRange(webpageUsageDict.Values);
+                }
+            }
+
+            return report;
+        }
+
         public void Dispose()
         {
-            checkCommand?.Dispose();
-            insertCommand?.Dispose();
-            updateCommand?.Dispose();
+            programUsageInsertCommand?.Dispose();
+            webpageUsageInsertCommand?.Dispose();
             connection?.Dispose();
         }
     }

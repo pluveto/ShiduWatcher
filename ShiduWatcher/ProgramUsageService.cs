@@ -10,7 +10,6 @@ namespace ShiduWatcher
     public class ProgramUsageService
     {
         private readonly DatabasePersister _databasePersister;
-        private ProgramUsage? _currentUsage;
         private bool _verbose;
         private bool _isPaused;
         private int _interval;
@@ -26,36 +25,32 @@ namespace ShiduWatcher
 
         }
 
-        public async void UpdateUsage(ProgramUsage newUsage)
+        public async Task AddUsage(ProgramUsage usage)
         {
-            if (_isPaused)
+            if (usage.Duration < _minValidDuration)
             {
                 return;
             }
-
-            if (_currentUsage == null || _currentUsage.ProcessName != newUsage.ProcessName)
-            {
-                _currentUsage = newUsage;
-            }
-            else
-            {
-                _currentUsage = _currentUsage.accumulate(newUsage);
-            }
-
-            if (_verbose)
-            {
-                Console.WriteLine(_currentUsage);
-            }
-
-            if (_currentUsage.Duration > _minValidDuration)
-            {
-                await _databasePersister.SaveProgramUsageAsync(_currentUsage);
-            }
+            await _databasePersister.SaveProgramUsageAsync(usage);
         }
 
-        public async Task<UsageReport> GetUsageReportAsync(DateTime startTime, DateTime endTime)
+        public async Task<UsageReport<ProgramUsageSummary>> GetUsageReportAsync(DateTime startTime, DateTime endTime)
         {
             return await _databasePersister.GetUsageReportAsync(startTime, endTime);
+        }
+
+        public async Task<UsageReport<WebpageUsageSummary>> GetWebpageUsagesAsync(DateTime startTime, DateTime endTime)
+        {
+            return await _databasePersister.GetWebpageUsageReportAsync(startTime, endTime);
+        }
+
+        public async Task AddWebpageUsage(WebpageUsage usage)
+        {
+            if (usage.Duration < _minValidDuration)
+            {
+                return;
+            }
+            await _databasePersister.SaveWebpageUsageAsync(usage);
         }
 
         public void Pause()
