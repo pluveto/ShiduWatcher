@@ -18,14 +18,18 @@ namespace ShiduWatcher
         }
 
         private Timer inactivityTimer;
-        private int inactivityThreshold;
+        private int inactivityThreshold; // in milliseconds
         public event EventHandler UserInactive;
+        public event EventHandler UserActive;
 
-        public UserInactivityDetector(int thresholdInMilliseconds, EventHandler userInactive, int checkIntervalInMilliseconds = 10000)
+        public bool lastActive { get; private set; } = true;
+
+        public UserInactivityDetector(TimeSpan threshold, TimeSpan checkInterval, EventHandler userInactive, EventHandler userActive)
         {
-            inactivityThreshold = thresholdInMilliseconds;
+            inactivityThreshold = threshold.Milliseconds;
             UserInactive += userInactive;
-            inactivityTimer = new Timer(checkIntervalInMilliseconds);
+            UserActive += userActive;
+            inactivityTimer = new Timer(checkInterval);
             inactivityTimer.Elapsed += CheckInactivity;
         }
 
@@ -41,10 +45,16 @@ namespace ShiduWatcher
 
         private void CheckInactivity(object? sender, ElapsedEventArgs e)
         {
-            if (GetIdleTime() > inactivityThreshold)
+            var active = GetIdleTime() <= inactivityThreshold;
+            if (!active && lastActive)
             {
                 UserInactive?.Invoke(this, EventArgs.Empty);
             }
+            else if (active && !lastActive)
+            {
+                UserActive?.Invoke(this, EventArgs.Empty);
+            }
+            lastActive = active;
         }
 
         private uint GetIdleTime()

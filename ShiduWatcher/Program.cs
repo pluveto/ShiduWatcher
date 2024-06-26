@@ -29,6 +29,10 @@ namespace ShiduWatcher
             var verbose = true;
             var databasePersister = new DatabasePersister();
             var usageService = new ProgramUsageService(databasePersister, 1000, verbose);
+            new UserInactivityDetector(threshold: TimeSpan.FromMinutes(10), checkInterval: TimeSpan.FromMinutes(1),
+                userActive: (s, e) => usageService.Pause(),
+                userInactive: (s, e) => usageService.Continue()
+            ).Start();
 
             var port = NetworkHelper.FindAvailablePort(1893, 1976);
             Console.WriteLine($"Starting ShiduWatcher on port {port}...");
