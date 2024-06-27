@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using System.Drawing;
 using ShiduWatcher.ShiduWatcher;
 using ShiduWatcher.Types;
+using Microsoft.Win32;
+using System.Diagnostics;
 
 namespace ShiduWatcher
 {
@@ -19,12 +21,26 @@ namespace ShiduWatcher
 
         const int SW_HIDE = 0;
         const int SW_SHOW = 5;
-
+        private static bool powerSuspend = false;
+        private static void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            if (e.Mode == PowerModes.Suspend)
+            {
+                Debug.WriteLine("system power suspend");
+                powerSuspend = true;
+            }
+            else if (e.Mode == PowerModes.Resume)
+            {
+                Debug.WriteLine("system power resume");
+                powerSuspend = false;
+            }
+        }
         static async Task Main(string[] args)
         {
             // 隐藏控制台窗口
             var handle = GetConsoleWindow();
             ShowWindow(handle, SW_HIDE);
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
             var verbose = true;
             var databasePersister = new DatabasePersister();
@@ -45,6 +61,11 @@ namespace ShiduWatcher
                 ProgramUsage? currentUsage = null;
                 while (true)
                 {
+                    if (powerSuspend)
+                    {
+                        continue;
+                    }
+
                     if (!usageService.IsPaused())
                     {
                         var newUsage = ForegroundWindowHelper.GetForegroundProgramUsage();

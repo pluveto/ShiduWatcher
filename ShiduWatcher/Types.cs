@@ -16,7 +16,6 @@ namespace ShiduWatcher.Types
 
     public class WebpageUsageSummary
     {
-        public required string Url { get; set; }
         public required string Domain { get; set; }
         public double TotalDuration { get; set; }
         public required List<UsageDetail> Usage { get; set; }
@@ -51,15 +50,13 @@ namespace ShiduWatcher.Types
 
     public class WebpageUsage
     {
-        public string Url { get; }
         public string Domain { get; }
 
         public DateTime StartTime { get; }
         public TimeSpan Duration { get; }
 
-        public WebpageUsage(string url, string domain, DateTime startTime, TimeSpan duration)
+        public WebpageUsage(string domain, DateTime startTime, TimeSpan duration)
         {
-            Url = url;
             Domain = domain;
             StartTime = startTime;
             Duration = duration;
@@ -67,7 +64,7 @@ namespace ShiduWatcher.Types
 
         public override string ToString()
         {
-            return $"WebpageUsage({Url}, {Domain}, {StartTime}, {Duration})";
+            return $"WebpageUsage({Domain}, {StartTime}, {Duration})";
         }
     }
 

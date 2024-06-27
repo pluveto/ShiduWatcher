@@ -30,11 +30,10 @@ namespace ShiduWatcher
             programUsageInsertCommand.Parameters.Add(new SQLiteParameter("@Duration"));
 
             string webpageUsageInsertQuery = @"
-            INSERT INTO WebpageUsage (Domain, Url, Timestamp, Duration)
-            VALUES (@Domain, @Url, @Timestamp, @Duration)";
+            INSERT INTO WebpageUsage (Domain, Timestamp, Duration)
+            VALUES (@Domain, @Timestamp, @Duration)";
             webpageUsageInsertCommand = new SQLiteCommand(webpageUsageInsertQuery, connection);
             webpageUsageInsertCommand.Parameters.Add(new SQLiteParameter("@Domain"));
-            webpageUsageInsertCommand.Parameters.Add(new SQLiteParameter("@Url"));
             webpageUsageInsertCommand.Parameters.Add(new SQLiteParameter("@Timestamp"));
             webpageUsageInsertCommand.Parameters.Add(new SQLiteParameter("@Duration"));
         }
@@ -63,9 +62,8 @@ namespace ShiduWatcher
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     Timestamp DATETIME,
                     Domain TEXT,
-                    Url TEXT,
                     Duration INTEGER,
-                    UNIQUE(Domain, Url, Timestamp)
+                    UNIQUE(Domain, Timestamp)
                 )";
                 using (var command = new SQLiteCommand(createWebpageUsageTableQuery, connection))
                 {
@@ -87,7 +85,6 @@ namespace ShiduWatcher
         public async Task SaveWebpageUsageAsync(WebpageUsage usage)
         {
             webpageUsageInsertCommand.Parameters["@Domain"].Value = usage.Domain;
-            webpageUsageInsertCommand.Parameters["@Url"].Value = usage.Url;
             webpageUsageInsertCommand.Parameters["@Timestamp"].Value = usage.StartTime;
             webpageUsageInsertCommand.Parameters["@Duration"].Value = (int)usage.Duration.TotalSeconds;
 
@@ -172,10 +169,10 @@ namespace ShiduWatcher
             };
 
             string query = @"
-            SELECT Domain, Url, Timestamp, Duration
+            SELECT Domain, Timestamp, Duration
             FROM WebpageUsage
             WHERE Timestamp BETWEEN @StartTime AND @EndTime
-            ORDER BY Domain, Url, Timestamp";
+            ORDER BY Domain, Timestamp";
 
             using (var command = new SQLiteCommand(query, connection))
             {
@@ -189,16 +186,14 @@ namespace ShiduWatcher
                     while (await reader.ReadAsync())
                     {
                         string domain = string.Empty;
-                        string url = string.Empty;
                         DateTime timestamp = default;
                         int duration = 0;
 
                         try { domain = reader.GetString(0); } catch { }
-                        try { url = reader.GetString(1); } catch { }
                         try { timestamp = reader.GetDateTime(2); } catch { }
                         try { duration = reader.GetInt32(3); } catch { }
 
-                        if (domain.Length == 0 || url.Length == 0)
+                        if (domain.Length == 0)
                         {
                             continue;
                         }
@@ -208,7 +203,6 @@ namespace ShiduWatcher
                             webpageUsageDict[domain] = new WebpageUsageSummary
                             {
                                 Domain = domain,
-                                Url = url,
                                 TotalDuration = 0,
                                 Usage = new List<UsageDetail>()
                             };

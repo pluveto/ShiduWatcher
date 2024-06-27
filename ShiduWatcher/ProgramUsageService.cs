@@ -15,15 +15,16 @@ namespace ShiduWatcher
         private bool _isPaused;
         private int _interval;
 
-        private TimeSpan _minValidDuration = new TimeSpan(0, 0, 10);
+        private static readonly TimeSpan defaultMinValidDuration = new TimeSpan(0, 0, 5);
+        private TimeSpan _minValidDuration;
 
-        public ProgramUsageService(DatabasePersister databasePersister, int initialInterval = 1000, bool verbose = false)
+        public ProgramUsageService(DatabasePersister databasePersister, int initialInterval = 1000, bool verbose = false, TimeSpan? minValidDuration = null)
         {
             _databasePersister = databasePersister;
             _verbose = verbose;
             _isPaused = false;
             _interval = initialInterval;
-
+            _minValidDuration = minValidDuration ?? defaultMinValidDuration;
         }
 
         public async Task AddUsage(ProgramUsage usage)
